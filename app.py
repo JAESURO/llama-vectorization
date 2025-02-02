@@ -6,6 +6,11 @@ from chromadb.config import Settings
 from llama_index.llms.ollama import Ollama
 from sentence_transformers import SentenceTransformer
 import PyPDF2
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+from langchain.llms import Ollama as LangOllama
+import duckduckgo_search as ddg
+from duckduckgo_search import DDGS
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -57,73 +62,50 @@ def extract_text_from_pdf(pdf_file):
         text += page.extract_text()
     return text
 
-# Section: Add Document
-st.header("Add a New Document")
+# Function to search the web using DuckDuckGo
+def web_search(query, max_results=10):
+    search_results = DDGS().text(query, max_results=max_results)
+    return "\n".join([result["body"] for result in search_results if "body" in result])
 
-# File uploader for PDF and TXT files
+# LangChain setup
+prompt_template = PromptTemplate(
+    input_variables=["context", "question"],
+    template="""
+    You are an intelligent chatbot. Answer the question based on the context provided.
+    Context: {context}
+    Question: {question}
+    """
+)
+llm_chain = LLMChain(llm=LangOllama(model   ="llama3.2"), prompt=prompt_template)
+
+# Streamlit UI
+st.header("Add a New Document")
 uploaded_file = st.file_uploader("Choose a PDF or TXT file", type=["pdf", "txt"])
 
 if uploaded_file is not None:
-    if uploaded_file.type == "application/pdf":
-        # Extract text from PDF
-        document_text = extract_text_from_pdf(uploaded_file)
-    elif uploaded_file.type == "text/plain":
-        # Read text from TXT file
-        document_text = uploaded_file.getvalue().decode("utf-8")
-
-    # Show the extracted content for user verification
+    document_text = extract_text_from_pdf(uploaded_file) if uploaded_file.type == "application/pdf" else uploaded_file.getvalue().decode("utf-8")
     st.text_area("Document Content", document_text, height=300)
-
     with st.form("add_document_form"):
         submit_button = st.form_submit_button("Add Document")
         if submit_button and document_text:
             doc_embedding = generate_embeddings([document_text])[0]
-            doc_id = f"doc_{len(get_stored_documents()['documents']) + 1}"
+            doc_id = f"doc_{len(get_stored_documents()["documents"]) + 1}"
             save_document(doc_id, document_text, doc_embedding)
             st.success(f"Document added successfully with ID: {doc_id}")
 
-# Sidebar: Model Selection
 st.sidebar.header("Model Configuration")
-selected_model = st.sidebar.selectbox(
-    "Select a model for response generation:",
-    ["llama3.2"]
-)
+selected_model = st.sidebar.selectbox("Select a model:", ["llama3.2"])
 
-# Section: Query and Chat
 st.header("Ask a Question")
 user_question = st.text_input("Enter your question:")
 
 if user_question:
-    # Generate embedding for the query
     query_embedding = generate_embeddings([user_question])[0]
-
-    # Retrieve relevant documents
     relevant_results = query_relevant_documents(query_embedding)
-
-    if relevant_results.get("documents", []):
-        # Combine retrieved documents into context
-        context = " ".join(doc if isinstance(doc, str) else " ".join(doc) for doc in relevant_results["documents"])
-        
-        # Update chat history
-        if 'chat_history' not in st.session_state:
-            st.session_state.chat_history = []
-        st.session_state.chat_history.append({"role": "user", "content": user_question})
-
-        # Add context explicitly for the assistant to use
-        chat_messages = [
-            ChatMessage(role="system", content=f"Use the following context for your response: {context}"),
-            *[ 
-                ChatMessage(role=msg["role"], content=msg["content"]) 
-                for msg in st.session_state.chat_history
-            ]
-        ]
-
-        # Generate response using the model
-        try:
-            assistant_response = generate_response(selected_model, chat_messages)
-            st.session_state.chat_history.append({"role": "assistant", "content": assistant_response})
-            st.write(f"### Assistant's Response:\n{assistant_response}")
-        except Exception as e:
-            st.error(f"Error generating response: {str(e)}")
-    else:
-        st.write("No relevant documents found for your query.")
+    context = " ".join(doc if isinstance(doc, str) else " ".join(doc) for doc in relevant_results["documents"]) if relevant_results.get("documents", []) else ""
+    
+    if not context:
+        context = web_search(user_question)
+    
+    chat_response = llm_chain.run({"context": context, "question": user_question})
+    st.write(f"### Assistant's Response:\n{chat_response}")
