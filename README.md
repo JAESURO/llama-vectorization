@@ -97,14 +97,14 @@ This project is open-source and available under the MIT License. Feel free to us
 ### Screenshots
 
 - **User Login Page**:
-   ![Login Page](![image](https://github.com/user-attachments/assets/893e2160-54b6-489f-809f-33267f63cc01))
+   ![Login Page](https://github.com/user-attachments/assets/893e2160-54b6-489f-809f-33267f63cc01)
   
 - **Document Upload & Management**:
-   ![Document Upload](![image](https://github.com/user-attachments/assets/22d8cc89-2f59-4b9c-b59b-8a369dde8fd6))
+   ![Document Upload](https://github.com/user-attachments/assets/22d8cc89-2f59-4b9c-b59b-8a369dde8fd6)
 
 - **Word Cloud Visualization**:
-   ![Word Cloud](![image](https://github.com/user-attachments/assets/36a2212b-0331-4e39-9e84-76164fe445d9))
-
+   ![Word Cloud](https://github.com/user-attachments/assets/36a2212b-0331-4e39-9e84-76164fe445d9)
+  
 --- 
 
 Enjoy your **Smart Document Assistant** experience! Let AI make your document management smarter! 📚🤖
