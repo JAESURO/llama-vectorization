@@ -97,7 +97,7 @@ This project is open-source and available under the MIT License. Feel free to us
 ### Screenshots
 
 - **User Login Page**:
-   ![Login Page](https://github.com/user-attachments/assets/893e2160-54b6-489f-809f-33267f63cc01)
+   ![Login Page](https://github.com/user-attachments/assets/9f6cad94-d6cc-4352-ba4e-ee2d36cb25df)
   
 - **Document Upload & Management**:
    ![Document Upload](https://github.com/user-attachments/assets/22d8cc89-2f59-4b9c-b59b-8a369dde8fd6)
