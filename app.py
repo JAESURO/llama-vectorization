@@ -8,14 +8,11 @@ import PyPDF2
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain.llms import Ollama as LangOllama
-import duckduckgo_search as ddg
-from duckduckgo_search import DDGS
+from langchain.tools import DuckDuckGoSearchResults  # Import DuckDuckGoSearchResults
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
-from collections import Counter
 import sqlite3
 from better_profanity import profanity
-import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,13 +33,15 @@ collection = client.get_or_create_collection("documents")
 # Load embedding model
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
+# Initialize DuckDuckGo Search
+ddg_search = DuckDuckGoSearchResults()  # Initialize DuckDuckGo search tool
+
 # Initialize session state variables
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
     st.session_state["username"] = ""
 if "chat_history" not in st.session_state:
     st.session_state["chat_history"] = []
-
 
 # ---------- Authentication System ----------
 def register():
@@ -60,7 +59,6 @@ def register():
             conn.commit()
             st.sidebar.success("✅ Registration successful! You can now log in.")
 
-
 def login():
     """Handles user login."""
     st.sidebar.header("🔐 User Login")
@@ -76,12 +74,10 @@ def login():
         else:
             st.sidebar.error("Invalid credentials!")
 
-
 def logout():
     """Logs out the current user."""
     st.session_state["logged_in"] = False
     st.sidebar.warning("Logged out!")
-
 
 register()
 
@@ -92,32 +88,31 @@ else:
     if st.sidebar.button("Logout"):
         logout()
 
-
 # ---------- Document Handling ----------
 def check_profanity(text):
     """Checks if the text contains profanity."""
     return profanity.contains_profanity(text)
 
-
 def clean_text(text):
     """Cleans text by censoring profanity."""
     return profanity.censor(text)
-
 
 def save_document(doc_id, text, embedding):
     """Saves document embeddings in ChromaDB."""
     collection.add(documents=[text], embeddings=[embedding], ids=[doc_id])
 
-
 def get_stored_documents():
     """Retrieves stored documents from ChromaDB."""
     return collection.get()
 
+def delete_document(doc_id):
+    """Deletes a document from ChromaDB."""
+    collection.delete(ids=[doc_id])
+    st.success(f"✅ Document {doc_id} deleted successfully.")
 
 def generate_embeddings(texts):
     """Generates embeddings for given text."""
     return embedding_model.encode(texts)
-
 
 # ---------- File Upload ----------
 def handle_file_upload():
@@ -140,7 +135,23 @@ def handle_file_upload():
             doc_id = f"doc_{len(get_stored_documents().get('documents', [])) + 1}"
             save_document(doc_id, document_text, doc_embedding)
             st.success(f"✅ Document added successfully with ID: {doc_id}")
-            
+
+# ---------- View and Delete Documents ----------
+def view_and_delete_documents():
+    """Displays all saved documents and allows deletion."""
+    st.header("📚 Saved Documents")
+    documents = get_stored_documents()
+
+    if documents.get("documents"):
+        for doc_id, doc_text in zip(documents["ids"], documents["documents"]):
+            with st.expander(f"📄 Document ID: {doc_id}"):
+                st.write(doc_text[:1000] + "..." if len(doc_text) > 1000 else doc_text)
+                if st.button(f"❌ Delete {doc_id}"):
+                    delete_document(doc_id)
+                    st.rerun()  # Refresh the page to reflect changes
+    else:
+        st.write("No documents found.")
+
 # ---------- Question Answering ----------
 def fetch_relevant_context(question):
     """Fetches relevant documents from ChromaDB or searches the web."""
@@ -151,10 +162,8 @@ def fetch_relevant_context(question):
         return " ".join(relevant_results["documents"])
     else:
         st.write("📡 No relevant documents found. Searching the web...")
-        with DDGS() as search:
-            search_results = search.text(question, max_results=5)
-        return " ".join([result["body"] for result in search_results if "body" in result]) if search_results else "No relevant results."
-
+        search_results = ddg_search.run(question)  # Use DuckDuckGoSearchResults
+        return search_results if search_results else "No relevant results."
 
 def generate_response(question, context):
     """Generates an AI response using the Ollama model."""
@@ -170,7 +179,6 @@ def generate_response(question, context):
     chain = LLMChain(llm=ollama_llm, prompt=prompt)
 
     return chain.run({"context": context, "question": question})
-
 
 def handle_question_answering():
     """Handles user input and AI response generation."""
@@ -191,29 +199,15 @@ def handle_question_answering():
 
         visualize_text_analysis(context)
 
-
 # ---------- Visualization ----------
 def visualize_text_analysis(text):
-    """Generates and displays word cloud and word frequency chart."""
+    """Generates and displays word cloud."""
     if text:
         wordcloud = WordCloud(width=800, height=400, background_color="white").generate(text)
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.imshow(wordcloud, interpolation="bilinear")
         ax.axis("off")
         st.pyplot(fig)
-
-        words = re.findall(r'\b\w+\b', text.lower())
-        if words:
-            word_counts = Counter(words).most_common(10)
-            labels, values = zip(*word_counts)
-
-            fig, ax = plt.subplots()
-            ax.bar(labels, values)
-            ax.set_xlabel("Words")
-            ax.set_ylabel("Frequency")
-            ax.set_title("Top 10 Most Common Words")
-            st.pyplot(fig)
-
 
 # ---------- Chat History ----------
 def display_chat_history():
@@ -225,10 +219,10 @@ def display_chat_history():
         if "bot" in chat:
             st.write(f"**Bot:** {chat['bot']}")
 
-
 # ---------- Main Execution ----------
 if st.session_state["logged_in"]:
     handle_file_upload()
+    view_and_delete_documents()  # Add this function to view and delete documents
     handle_question_answering()
     display_chat_history()
 else:
