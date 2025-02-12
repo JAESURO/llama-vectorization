@@ -15,20 +15,15 @@ from wordcloud import WordCloud
 from better_profanity import profanity
 import sqlite3
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 
-# Streamlit Page Config
 st.set_page_config(page_title="Smart Document Assistant", page_icon="📄", layout="wide")
 
-# Initialize ChromaDB client
 client = chromadb.Client(Settings(persist_directory="chromadb_data"))
 collection = client.get_or_create_collection("documents")
 
-# Load SentenceTransformer model
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
-# Initialize SQLite database for user authentication
 conn = sqlite3.connect("users.db")
 cursor = conn.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -37,7 +32,6 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS users (
 )''')
 conn.commit()
 
-# Function to register a new user
 def register():
     st.sidebar.header("📝 Register New User")
     new_username = st.sidebar.text_input("Choose a Username")
@@ -51,7 +45,6 @@ def register():
             conn.commit()
             st.sidebar.success("✅ Registration successful! You can now log in.")
 
-# Function to check login
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
     st.session_state["username"] = ""
@@ -79,36 +72,30 @@ else:
         st.session_state["logged_in"] = False
         st.sidebar.warning("Logged out!")
 
-# Function to check profanity
 def check_profanity(text):
     return profanity.contains_profanity(text)
 
 def clean_text(text):
     return profanity.censor(text)
 
-# Short-Term Memory (Session-Based)
 if "chat_history" not in st.session_state:
     st.session_state["chat_history"] = []
 
-# Function to save document
 def save_document(doc_id, text, embedding):
     collection.add(documents=[text], embeddings=[embedding], ids=[doc_id])
 
-# Function to retrieve all documents
 def get_stored_documents():
     return collection.get()
 
-# Function to generate embeddings
 def generate_embeddings(texts):
     return embedding_model.encode(texts)
 
-# Main UI
 st.header("📂 Upload a New Document")
 if st.session_state["logged_in"]:
     uploaded_file = st.file_uploader("Choose a PDF or TXT file", type=["pdf", "txt"])
     if uploaded_file:
         document_text = uploaded_file.getvalue().decode("utf-8") if uploaded_file.type == "text/plain" else ""
-        document_text = clean_text(document_text)  # Apply profanity filter
+        document_text = clean_text(document_text)
         st.text_area("📖 Document Preview", document_text[:2000] + "..." if len(document_text) > 2000 else document_text, height=200)
         if st.button("🚀 Add Document"):
             doc_embedding = generate_embeddings([document_text])[0]
@@ -118,7 +105,6 @@ if st.session_state["logged_in"]:
 else:
     st.warning("Please log in to upload documents.")
 
-# Ask a Question
 st.header("💡 Ask a Question")
 user_question = st.text_input("✏ Enter your question:")
 if user_question:
@@ -132,7 +118,6 @@ if user_question:
         st.session_state["chat_history"].append({"bot": context})
         st.write(f"### 🤖 Assistant's Response:\n{context}")
 
-# Display Chat History
 st.header("📜 Chat History")
 for chat in st.session_state["chat_history"]:
     if "user" in chat:
